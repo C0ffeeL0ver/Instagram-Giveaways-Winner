@@ -1,8 +1,8 @@
 # Instagram-Giveaways-Winner
 
-![GitHub top language](https://img.shields.io/github/languages/top/fytex/Instagram-Giveaways-Winner?style=for-the-badge)
+![GitHub top language](https://img.shields.io/github/languages/top/C0ffeeL0ver/Instagram-Giveaways-Winner?style=for-the-badge)
 ![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/fytex/Instagram-Giveaways-Winner?style=for-the-badge)
-![GitHub last commit](https://img.shields.io/github/last-commit/fytex/Instagram-Giveaways-Winner?style=for-the-badge)
+![GitHub last commit](https://img.shields.io/github/last-commit/C0ffeeL0ver/Instagram-Giveaways-Winner?style=for-the-badge)
 
 
 ##### Instagram Bot which when given a post url will spam mentions to increase the chances of winning
