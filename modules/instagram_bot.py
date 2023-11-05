@@ -22,7 +22,7 @@ class Bot(Browser):
 
 
     def __init__(self, *args, **kwargs):
-
+        self.folowers_per_scroll = 12
         self.url_base = 'https://www.instagram.com/'
         self.url_login = self.url_base + 'accounts/login'
         self.timeout = kwargs.get('timeout', 30)
@@ -37,7 +37,6 @@ class Bot(Browser):
 
 
     def log_in(self, username:str, password:str):
-
         '''
 
         Logs into Instagram account using the given credentials
@@ -49,7 +48,6 @@ class Bot(Browser):
         '''
 
         COOKIE_NAME = 'sessionid'
-
         self.driver.get(self.url_login)
 
         # Wait until Instagram's home page is visible
@@ -59,7 +57,7 @@ class Bot(Browser):
         try:
             
             with self.implicitly_wait.ignore():
-                self.driver.find_element_by_css_selector('div[role=dialog] button').click()
+                self.driver.find_element_by_xpath("/html/body/div[5]/div[1]/div/div[2]/div/div/div/div/div[2]/div/button[1]").click()
             
         except NoSuchElementException: # Popup doesn't appear to some people
             pass
@@ -82,16 +80,18 @@ class Bot(Browser):
 
             self.driver.refresh()
 
+        print(self.driver.find_element_by_tag_name('html').get_attribute('class'))
+        if not self.driver.get_cookie("ds_user_id"):
 
-        if 'not-logged-in' in self.driver.find_element_by_tag_name('html').get_attribute('class'):
-
-            username_input, password_input, *_ = self.driver.find_elements_by_css_selector('form input')
+            username_input = self.driver.find_element_by_xpath('/html/body/div[2]/div/div/div[2]/div/div/div/div[1]/section/main/div/div/div[1]/div[2]/form/div/div[1]/div/label/input')
+            password_input = self.driver.find_element_by_xpath('/html/body/div[2]/div/div/div[2]/div/div/div/div[1]/section/main/div/div/div[1]/div[2]/form/div/div[2]/div/label/input')
 
             username_input.send_keys(username)
             password_input.send_keys(password + Keys.ENTER)
 
             WebDriverWait(self.driver, self.timeout).until(
-                lambda x: 'js logged-in' in x.find_element_by_tag_name('html').get_attribute('class'))
+                lambda x: x.get_cookie("ds_user_id") != None
+            )
 
             cookie = self.driver.get_cookie(COOKIE_NAME)
 
@@ -153,6 +153,18 @@ class Bot(Browser):
             file.writelines(line + '\n' for line in connections_ext)
 
 
+    def scroll_the_following_tab(self):
+        sleep(2)
+        self.driver.execute_script("""
+        
+            elem = document.querySelector('div[role=dialog] > div > div:nth-of-type(2) > div > div > div:nth-of-type(3)');
+            elem.scrollTo({
+                        top: elem.scrollHeight,
+                        behavior: 'smooth'
+                    })
+
+        """)
+
     def get_user_connections_from_web(self, limit:Optional[int]=None, followers:bool=True, force_search:bool=False):
 
         '''
@@ -198,9 +210,8 @@ class Bot(Browser):
         ''')
 
         # Have to click once in order to load connections
-        self.driver.find_element_by_css_selector('div[role=dialog] li > div > div:nth-of-type(2) > div:nth-of-type(2)').click()
+        #self.driver.find_element_by_css_selector('div[role=dialog] li > div > div:nth-of-type(2) > div:nth-of-type(2)').click()
 
-        timestamp = perf_counter()
 
         limit = min(limit, connections_limit) if limit else connections_limit
 
@@ -210,21 +221,29 @@ class Bot(Browser):
         connections_added_count = 0
         total_connections_searched = 0
 
+        countFollowers = self.folowers_per_scroll
+        while countFollowers < connections_limit:
+            self.scroll_the_following_tab()
+            countFollowers += self.folowers_per_scroll
+            print("Scrolling...")
+
+        timestamp = perf_counter()
+
         while perf_counter() - timestamp < self.timeout: # Timer to prevent being in a loop if semone unfollows while searching
 
-            connections_list = self.driver.find_elements_by_css_selector('div[role=dialog] ul li span a')
+            connections_list = self.driver.find_elements_by_css_selector('div[role=dialog] > div > div:nth-of-type(2) > div > div > div:nth-of-type(3) > div > div > div')
             diff_connections_count = len(connections_list) - total_connections_searched
 
             if diff_connections_count > 0:
 
                 total_connections_searched += diff_connections_count
                 timestamp = perf_counter()
-                count = 0
+                count = 1
 
-                for connection in connections_list[-diff_connections_count:]:
-
+                for _ in connections_list[-diff_connections_count:]:
+                    connection = self.driver.find_element_by_css_selector(f'div[role=dialog] > div > div:nth-of-type(2) > div > div > div:nth-of-type(3) > div > div > div:nth-of-type({count}) > div > div > div > div:nth-of-type(2) > div > div > div > div > div > a > div > div > span')
                     connection_username = '@' + connection.text
-
+                    count += 1
                     if connection_username not in connections_set:
 
                         self.connections.append(connection_username)
@@ -236,11 +255,6 @@ class Bot(Browser):
 
                 if total_connections_searched >= connections_limit: # This might only trigger when force_search is enabled
                     break
-
-
-            self.driver.execute_script('''
-                    elem.scrollTo(0, elem.scrollHeight);
-                ''')
 
 
     def get_user_from_post(self, url:str) -> str:
@@ -273,14 +287,12 @@ class Bot(Browser):
         '''
 
         # Click Comment's Box
-        self.driver \
-            .find_element_by_css_selector('article[role=\'presentation\'] form > textarea') \
-            .click()
+        comment_box = self.driver.find_element_by_xpath('/html/body/div[2]/div/div/div[2]/div/div/div/div[1]/div[1]/div[2]/section/main/div/div[1]/div/div[2]/div/section/div/form/div/textarea')
+        comment_box.click()
 
         # Write in Comment's Box
-        comment_box = self.driver \
-                        .find_element_by_css_selector('article[role=\'presentation\'] form > textarea') \
-                        .send_keys(comment)
+        comment_box = self.driver.find_element_by_xpath('/html/body/div[2]/div/div/div[2]/div/div/div/div[1]/div[1]/div[2]/section/main/div/div[1]/div/div[2]/div/section/div/form/div/textarea')
+        comment_box.send_keys(comment)
 
     def override_post_requests_js(self, comment:str):
 
@@ -322,9 +334,7 @@ class Bot(Browser):
         try:
 
             # Click Post's Button to send Comment
-            self.driver \
-                .find_element_by_css_selector('article[role=\'presentation\'] form > button:nth-of-type(2)') \
-                .click()
+            self.driver.find_element_by_xpath('/html/body/div[2]/div/div/div[2]/div/div/div/div[1]/div[1]/div[2]/section/main/div/div[1]/div/div[2]/div/section/div/form/div/div[2]/div').click()
 
         except WebDriverException:
             sleep(60) # Couldn't comment error pop up. No specific css selector. (<p> was too risky because of pop up's warnings such as cookies one)
@@ -391,7 +401,6 @@ class Bot(Browser):
                                     Info: Message is fine. If you open this post in another browser you can see it is working. Can\'t show here the real message because there are some characters not supported by ChromeDriver (non-BMP chars)
                                     '''
                             self.write_comment(comment)
-
                     has_input = True
 
 
@@ -399,7 +408,7 @@ class Bot(Browser):
 
                 if success:
                     self.num_comments += 1
-
+                    print(f'Comment {self.num_comments} sent: {comment}')
                     sleep(get_interval())
 
 
